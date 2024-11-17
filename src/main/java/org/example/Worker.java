@@ -5,23 +5,10 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 
-import java.nio.charset.StandardCharsets;
+import java.io.*;
 
 public class Worker {
     private final static String QUEUE_NAME = "email_queue";
-
-    //The task to be done by the worker is sleep for one second for every dot contained in the message being sent by the Producer
-    private static void doWork(String task) {
-        for (char ch : task.toCharArray()) {
-            if (ch == '.') {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException _ignored) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
-    }
 
     public static void main(String[] argv) throws Exception {
         ConnectionFactory factory = new ConnectionFactory();
@@ -30,17 +17,23 @@ public class Worker {
         Channel channel = connection.createChannel();
 
         channel.queueDeclare(QUEUE_NAME, true, false, false, null);
-        System.out.println(" [*] Waiting for messages. Press CTRL+C to exit.");
+        System.out.println(" [*] Waiting for emails. Press CTRL+C to exit.");
 
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-            System.out.println(" [x] Received '" + message + "'");
 
             try {
-                doWork(message);
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(delivery.getBody());
+                ObjectInputStream objectInputStream = new ObjectInputStream(byteArrayInputStream);
+                Email email = (Email) objectInputStream.readObject();
+
+                System.out.println(" [x] Received Email: " + email);
+                objectInputStream.close();
+            } catch (Exception e){
+                System.out.println("Failed to process email.");
             } finally {
                 System.out.println(" [x] Work is done.");
             }
+
         };
 
         boolean autoAck = true;
